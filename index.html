@@ -3,294 +3,225 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Multimodal Live AI</title>
+    <title>Gemini Live v2</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/framer-motion/11.0.8/framer-motion.js"></script>
     <style>
-        :root {
-            --neon-cyan: #00f3ff;
-            --neon-violet: #bc13fe;
-            --dark-bg: #0a0a0c;
-        }
-        body {
-            background-color: var(--dark-bg);
-            color: white;
-            font-family: 'Inter', sans-serif;
-            overflow: hidden;
-        }
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .glow-cyan { box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }
-        .glow-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: .7; transform: scale(1.05); }
-        }
-        canvas { width: 100%; height: 200px; }
+        :root { --neon-cyan: #00f3ff; --dark-bg: #0a0a0c; }
+        body { background-color: var(--dark-bg); color: white; font-family: sans-serif; overflow: hidden; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all 0.3s; }
+        .status-disconnected { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        .status-connected { background: #10b981; box-shadow: 0 0 10px #10b981; }
+        canvas { width: 100%; height: 150px; }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-4">
 
     <!-- API Key Modal -->
-    <div id="setup-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-        <div class="glass p-8 rounded-2xl w-full max-w-md glow-cyan">
-            <h2 class="text-2xl font-bold mb-4 bg-gradient-to-r from-cyan-400 to-violet-500 bg-clip-text text-transparent">
-                Gemini Live Setup
-            </h2>
-            <p class="text-gray-400 mb-6 text-sm">Enter your Gemini API Key to start the real-time session.</p>
-            <input type="password" id="api-key" placeholder="AIza..." 
-                class="w-full bg-black/50 border border-white/10 rounded-lg p-3 mb-6 focus:outline-none focus:border-cyan-500 transition-colors">
-            <button onclick="saveKeyAndContinue()" 
-                class="w-full bg-gradient-to-r from-cyan-500 to-violet-600 p-3 rounded-lg font-bold hover:opacity-90 transition-opacity">
-                Initialize Connection
+    <div id="setup-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
+        <div class="glass p-8 rounded-2xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4 text-cyan-400">Gemini Live Config</h2>
+            <input type="password" id="api-key" placeholder="Enter Gemini API Key (AIza...)" 
+                class="w-full bg-white/5 border border-white/10 rounded-lg p-3 mb-6 focus:outline-none focus:border-cyan-500">
+            <button onclick="saveKey()" class="w-full bg-cyan-600 p-3 rounded-lg font-bold hover:bg-cyan-500 transition-all">
+                Access Laboratory
             </button>
         </div>
     </div>
 
-    <!-- Main UI -->
-    <main class="w-full max-w-4xl flex flex-col items-center">
-        <header class="mb-12 text-center">
-            <h1 class="text-4xl font-black tracking-tighter mb-2">GEMINI <span class="text-cyan-400">LIVE</span></h1>
-            <div id="status-tag" class="text-xs uppercase tracking-widest text-gray-500 flex items-center gap-2 justify-center">
-                <span id="status-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
-                <span id="status-text">Disconnected</span>
+    <!-- Interface -->
+    <main class="w-full max-w-2xl text-center">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold tracking-tighter uppercase">Gemini <span class="text-cyan-500">Live API</span></h1>
+            <p id="status-display" class="text-xs text-gray-500 mt-2">
+                <span id="dot" class="status-dot status-disconnected mr-2"></span>
+                <span id="status-text">DISCONNECTED</span>
+            </p>
+        </div>
+
+        <div class="glass rounded-3xl p-6 mb-8 relative">
+            <canvas id="canvas"></canvas>
+            <div id="log-display" class="text-[10px] font-mono text-gray-500 mt-4 h-20 overflow-y-auto text-left border-t border-white/5 pt-2">
+                System Ready...
             </div>
-        </header>
-
-        <!-- Visualizer Area -->
-        <div class="relative w-full aspect-video glass rounded-3xl overflow-hidden flex items-center justify-center mb-8">
-            <canvas id="visualizer"></canvas>
-            <div id="ai-active-ring" class="absolute w-48 h-48 rounded-full border-2 border-cyan-500/30 hidden"></div>
         </div>
 
-        <!-- Controls -->
-        <div class="flex gap-6">
-            <button id="start-btn" onclick="startSession()" 
-                class="glass px-8 py-4 rounded-full font-bold text-cyan-400 hover:bg-cyan-500/10 transition-all flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                Connect
-            </button>
-            <button id="stop-btn" onclick="stopSession()" disabled 
-                class="glass px-8 py-4 rounded-full font-bold text-red-400 opacity-50 cursor-not-allowed hover:bg-red-500/10 transition-all flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
-                Disconnect
-            </button>
+        <div class="flex justify-center gap-4">
+            <button id="btn-start" onclick="initSession()" class="bg-white text-black px-8 py-3 rounded-full font-bold hover:bg-cyan-400 transition-all">START SESSION</button>
+            <button id="btn-stop" onclick="stopSession()" class="bg-red-900/20 text-red-500 border border-red-500/50 px-8 py-3 rounded-full font-bold hidden">STOP</button>
         </div>
+        
+        <button onclick="resetKey()" class="mt-8 text-[10px] text-gray-600 underline uppercase tracking-widest">Reset API Key</button>
     </main>
 
     <script>
-        /**
-         * CONFIGURATION & STATE
-         */
-        const MODEL = "gemini-2.0-flash-exp";
-        const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BiDiGenerateContent`;
-        
         let ws = null;
-        let audioContext = null;
-        let audioWorkletNode = null;
-        let microphoneStream = null;
-        let pcmPlayer = null;
-        let isConnected = false;
+        let audioCtx = null;
+        let stream = null;
+        let processor = null;
+        let nextPlayTime = 0;
 
-        // UI Elements
-        const statusDot = document.getElementById('status-dot');
-        const statusText = document.getElementById('status-text');
-        const startBtn = document.getElementById('start-btn');
-        const stopBtn = document.getElementById('stop-btn');
-        const canvas = document.getElementById('visualizer');
-        const ctx = canvas.getContext('2d');
+        const log = (msg) => {
+            const el = document.getElementById('log-display');
+            el.innerHTML += `<div>> ${msg}</div>`;
+            el.scrollTop = el.scrollHeight;
+            console.log(`[GeminiLive] ${msg}`);
+        };
 
-        /**
-         * AUDIO PROCESSING LOGIC
-         */
-        class PCMPlayer {
-            constructor() {
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-                this.nextStartTime = this.audioContext.currentTime;
-            }
-
-            async playChunk(base64Audio) {
-                const binary = atob(base64Audio);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                
-                const pcmData = new Int16Array(bytes.buffer);
-                const float32Data = new Float32Array(pcmData.length);
-                for (let i = 0; i < pcmData.length; i++) float32Data[i] = pcmData[i] / 32768.0;
-
-                const buffer = this.audioContext.createBuffer(1, float32Data.length, 24000);
-                buffer.copyToChannel(float32Data, 0);
-
-                const source = this.audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(this.audioContext.destination);
-                
-                const startTime = Math.max(this.nextStartTime, this.audioContext.currentTime);
-                source.start(startTime);
-                this.nextStartTime = startTime + buffer.duration;
-            }
-
-            stop() {
-                this.audioContext.close();
-            }
-        }
-
-        /**
-         * WEBSOCKET & SESSION MANAGEMENT
-         */
-        function saveKeyAndContinue() {
+        function saveKey() {
             const key = document.getElementById('api-key').value;
-            if (key) {
-                sessionStorage.setItem('gemini_api_key', key);
-                document.getElementById('setup-modal').classList.add('hidden');
+            if(key) {
+                sessionStorage.setItem('gemini_key', key);
+                document.getElementById('setup-modal').style.display = 'none';
             }
         }
 
-        async function startSession() {
-            const apiKey = sessionStorage.getItem('gemini_api_key');
-            if (!apiKey) return alert("API Key missing");
-
-            try {
-                ws = new WebSocket(`${URL}?key=${apiKey}`);
-
-                ws.onopen = () => {
-                    console.log("WebSocket Connected");
-                    const setupMessage = {
-                        setup: { model: `models/${MODEL}` }
-                    };
-                    ws.send(JSON.stringify(setupMessage));
-                    updateStatus(true);
-                    startAudioCapture();
-                };
-
-                ws.onmessage = async (event) => {
-                    const response = JSON.parse(await event.data.text());
-                    
-                    if (response.serverContent?.modelTurn?.parts?.[0]?.inlineData) {
-                        const audioData = response.serverContent.modelTurn.parts[0].inlineData.data;
-                        if (!pcmPlayer) pcmPlayer = new PCMPlayer();
-                        pcmPlayer.playChunk(audioData);
-                        animateVisualizer(true);
-                    }
-                };
-
-                ws.onerror = (err) => console.error("WS Error:", err);
-                ws.onclose = () => stopSession();
-
-            } catch (err) {
-                console.error("Session start failed:", err);
-            }
+        function resetKey() {
+            sessionStorage.removeItem('gemini_key');
+            location.reload();
         }
 
-        async function startAudioCapture() {
-            microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: { 
-                sampleRate: 16000,
-                channelCount: 1,
-                echoCancellation: true 
-            }});
+        if(sessionStorage.getItem('gemini_key')) {
+            document.getElementById('setup-modal').style.display = 'none';
+        }
+
+        async function initSession() {
+            const API_KEY = sessionStorage.getItem('gemini_key');
+            const URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BiDiGenerateContent?key=${API_KEY}`;
+
+            log("Attempting to connect...");
             
-            audioContext = new AudioContext({ sampleRate: 16000 });
-            const source = audioContext.createMediaStreamSource(microphoneStream);
-            
-            // Inline AudioWorklet Processor
-            const workletCode = `
-                class RecorderProcessor extends AudioWorkletProcessor {
-                    process(inputs, outputs, parameters) {
-                        const input = inputs[0];
-                        if (input.length > 0) {
-                            const pcmData = new Int16Array(input[0].length);
-                            for (let i = 0; i < input[0].length; i++) {
-                                pcmData[i] = Math.max(-1, Math.min(1, input[0][i])) * 0x7FFF;
-                            }
-                            this.port.postMessage(pcmData.buffer, [pcmData.buffer]);
-                        }
-                        return true;
+            ws = new WebSocket(URL);
+
+            ws.onopen = () => {
+                log("WebSocket Open. Sending Setup...");
+                const setup = {
+                    setup: { 
+                        model: "models/gemini-2.0-flash-exp",
+                        generation_config: { response_modalities: ["audio"] }
                     }
+                };
+                ws.send(JSON.stringify(setup));
+                updateUI(true);
+            };
+
+            ws.onmessage = async (event) => {
+                const data = JSON.parse(await event.data.text());
+                
+                // Handle Audio Response
+                if (data.serverContent?.modelTurn?.parts?.[0]?.inlineData) {
+                    const base64Audio = data.serverContent.modelTurn.parts[0].inlineData.data;
+                    playAudioChunk(base64Audio);
                 }
-                registerProcessor('recorder-processor', RecorderProcessor);
-            `;
 
-            const blob = new Blob([workletCode], { type: 'application/javascript' });
-            const workletUrl = URL.createObjectURL(blob);
-            
-            await audioContext.audioWorklet.addModule(workletUrl);
-            audioWorkletNode = new AudioWorkletNode(audioContext, 'recorder-processor');
-            
-            audioWorkletNode.port.onmessage = (event) => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    const base64Audio = btoa(String.fromCharCode(...new Uint8Array(event.data)));
-                    ws.send(JSON.stringify({
-                        realtime_input: {
-                            media_chunks: [{
-                                mime_type: "audio/pcm;rate=16000",
-                                data: base64Audio
-                            }]
-                        }
-                    }));
-                    animateVisualizer(false);
+                if (data.setupComplete) {
+                    log("Handshake Complete. Starting Mic...");
+                    startMic();
                 }
             };
 
-            source.connect(audioWorkletNode);
+            ws.onclose = (e) => {
+                log(`Connection closed: ${e.reason || 'Unknown error'}`);
+                stopSession();
+            };
+
+            ws.onerror = (e) => log("WebSocket Error occurred.");
+        }
+
+        async function startMic() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioCtx.createMediaStreamSource(stream);
+
+                // Inline worker to handle PCM conversion
+                const workerCode = `
+                    class PCMProcessor extends AudioWorkletProcessor {
+                        process(inputs) {
+                            const input = inputs[0][0];
+                            if (!input) return true;
+                            const pcm = new Int16Array(input.length);
+                            for (let i = 0; i < input.length; i++) {
+                                pcm[i] = Math.max(-1, Math.min(1, input[i])) * 0x7FFF;
+                            }
+                            this.port.postMessage(pcm.buffer, [pcm.buffer]);
+                            return true;
+                        }
+                    }
+                    registerProcessor('pcm-processor', PCMProcessor);
+                `;
+
+                const blob = new Blob([workerCode], { type: 'application/javascript' });
+                await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+                
+                processor = new AudioWorkletNode(audioCtx, 'pcm-processor');
+                processor.port.onmessage = (e) => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        const base64 = btoa(String.fromCharCode(...new Uint8Array(e.data)));
+                        ws.send(JSON.stringify({
+                            realtime_input: {
+                                media_chunks: [{ mime_type: "audio/pcm;rate=16000", data: base64 }]
+                            }
+                        }));
+                    }
+                };
+
+                source.connect(processor);
+                log("Microphone streaming live.");
+                drawWave();
+            } catch (err) {
+                log(`Mic Error: ${err.message}`);
+            }
+        }
+
+        function playAudioChunk(base64) {
+            if (!audioCtx) return;
+            const arrayBuffer = Uint8Array.from(atob(base64), c => c.charCodeAt(0)).buffer;
+            const pcm16 = new Int16Array(arrayBuffer);
+            const float32 = new Float32Array(pcm16.length);
+            for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / 32768;
+
+            const buffer = audioCtx.createBuffer(1, float32.length, 24000);
+            buffer.copyToChannel(float32, 0);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            
+            const start = Math.max(nextPlayTime, audioCtx.currentTime);
+            source.start(start);
+            nextPlayTime = start + buffer.duration;
         }
 
         function stopSession() {
             if (ws) ws.close();
-            if (microphoneStream) microphoneStream.getTracks().forEach(t => t.stop());
-            if (audioContext) audioContext.close();
-            if (pcmPlayer) pcmPlayer.stop();
-            
-            ws = null;
-            pcmPlayer = null;
-            updateStatus(false);
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            if (audioCtx) audioCtx.close();
+            updateUI(false);
+            log("Session Terminated.");
         }
 
-        /**
-         * UI & VISUALS
-         */
-        function updateStatus(connected) {
-            isConnected = connected;
-            statusDot.className = `w-2 h-2 rounded-full ${connected ? 'bg-cyan-500 shadow-[0_0_10px_#00f3ff]' : 'bg-red-500'}`;
-            statusText.innerText = connected ? 'Live' : 'Disconnected';
-            startBtn.disabled = connected;
-            startBtn.className = `glass px-8 py-4 rounded-full font-bold text-cyan-400 flex items-center gap-3 transition-all ${connected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-cyan-500/10'}`;
-            stopBtn.disabled = !connected;
-            stopBtn.className = `glass px-8 py-4 rounded-full font-bold text-red-400 flex items-center gap-3 transition-all ${!connected ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500/10'}`;
+        function updateUI(connected) {
+            document.getElementById('btn-start').classList.toggle('hidden', connected);
+            document.getElementById('btn-stop').classList.toggle('hidden', !connected);
+            document.getElementById('dot').className = `status-dot ${connected ? 'status-connected' : 'status-disconnected'}`;
+            document.getElementById('status-text').innerText = connected ? 'LIVE - SPEAK NOW' : 'DISCONNECTED';
         }
 
-        // Simple Sine Wave Visualizer
-        let offset = 0;
-        function animateVisualizer(isAIPlaying) {
+        // Simple Visualizer
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        function drawWave() {
+            if(!ws) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.beginPath();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = isAIPlaying ? '#bc13fe' : '#00f3ff';
-
-            for (let x = 0; x < canvas.width; x++) {
-                const y = canvas.height / 2 + Math.sin(x * 0.02 + offset) * (isAIPlaying ? 40 : 20);
-                if (x === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = 2;
+            ctx.moveTo(0, 75);
+            for(let i=0; i<canvas.width; i++) {
+                ctx.lineTo(i, 75 + Math.sin(i * 0.05 + Date.now() * 0.01) * 20);
             }
             ctx.stroke();
-            offset += 0.1;
-        }
-
-        // Initialize Canvas size
-        function resize() {
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-        }
-        window.onresize = resize;
-        resize();
-
-        // Check if key already exists
-        if(sessionStorage.getItem('gemini_api_key')) {
-            document.getElementById('setup-modal').classList.add('hidden');
+            requestAnimationFrame(drawWave);
         }
     </script>
 </body>
